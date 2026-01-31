@@ -1,7 +1,11 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import "../styles/bio.css";
 
-const GSEInput: React.FC = () => {
+export interface GSEInputRef {
+  reset: () => void;
+}
+
+const GSEInput = forwardRef<GSEInputRef>((props, ref) => {
   const [input, setInput] = useState("");
   const [error, setError] = useState("");
   const [logs, setLogs] = useState<string[]>([]);
@@ -9,6 +13,15 @@ const GSEInput: React.FC = () => {
   const logRef = useRef<HTMLDivElement>(null);
 
   const gseRegex = /^(\s*GSE\d+\s*)(,\s*GSE\d+\s*)*$/i;
+
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      setInput("");
+      setError("");
+      setLogs([]);
+      setDownloading(false);
+    },
+  }));
 
   const handleSubmit = async () => {
     const trimmedInput = input.trim();
@@ -53,14 +66,11 @@ const GSEInput: React.FC = () => {
       setLogs([]);
     } finally {
       setDownloading(false);
-      setInput("");
     }
   };
 
   useEffect(() => {
-    if (logRef.current) {
-      logRef.current.scrollTop = logRef.current.scrollHeight;
-    }
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [logs]);
 
   return (
@@ -88,26 +98,13 @@ const GSEInput: React.FC = () => {
 
       {error && <p className="gse-input-error">{error}</p>}
 
-      <div
-        ref={logRef}
-        className="gse-input-logs"
-        style={{
-          marginTop: "1rem",
-          height: "300px",
-          overflowY: "auto",
-          backgroundColor: "#f4f4f4",
-          padding: "0.5rem",
-          borderRadius: "5px",
-          fontFamily: "monospace",
-          whiteSpace: "pre-line",
-        }}
-      >
+      <div ref={logRef} className="gse-input-logs">
         {logs.map((log, i) => (
           <div key={i}>{log}</div>
         ))}
       </div>
     </div>
   );
-};
+});
 
 export default GSEInput;

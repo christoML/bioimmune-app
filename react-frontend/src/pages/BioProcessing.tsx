@@ -1,14 +1,14 @@
-import * as React from "react"; // Use the namespace import
-import "../styles/bio.css"; // Keep this for styling
+import * as React from "react";
+import "../styles/bio.css";
 import LogoBanner from "../components/LogoBanner";
 import GSEInput from "../components/GSEInput";
+import GetMetadata from "../components/GetMetadata";
+import type { GetMetadataRef } from "../components/GetMetadata";
+import type { GSEInputRef } from "../components/GSEInput";
 import DataPreprocessing from "../components/DataPreprocessing";
 
+const { useState, useRef } = React;
 
-//remove the warning about React
-const { useState } = React;
-
-// Clear All button component
 const ClearButton = ({ onReset }: { onReset: () => void }) => (
   <button className="bio-btn bio-btn-clear" onClick={onReset}>
     🔄 Clear All
@@ -17,14 +17,15 @@ const ClearButton = ({ onReset }: { onReset: () => void }) => (
 
 function BioProcessing() {
   const [terminatedAlert, setTerminatedAlert] = useState("");
-  const [gseResetKey, setGseResetKey] = useState(0); // force GSEInput reset
 
-  // Clear All action
+  // Refs for child components
+  const gseInputRef = useRef<GSEInputRef>(null);
+  const metadataRef = useRef<GetMetadataRef>(null);
+
   const handleClearAll = () => {
-    // increment key to remount GSEInput
-    setGseResetKey(prev => prev + 1);
+    gseInputRef.current?.reset();
+    metadataRef.current?.reset();
 
-    // Show temporary alert
     setTerminatedAlert("All inputs cleared!");
     setTimeout(() => setTerminatedAlert(""), 3000);
   };
@@ -40,22 +41,24 @@ function BioProcessing() {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          margin: "20px 0"
+          margin: "20px 0",
         }}
       >
         <ClearButton onReset={handleClearAll} />
         {terminatedAlert && (
-          <div
-            className="bio-alert bio-alert-success"
-            style={{ marginLeft: 10 }}
-          >
+          <div className="bio-alert bio-alert-success" style={{ marginLeft: 10 }}>
             {terminatedAlert}
           </div>
         )}
       </div>
 
-      {/* GSE Input Component with reset key */}
-      <GSEInput key={gseResetKey} />
+      {/* Step 1: GSE Input */}
+      <GSEInput ref={gseInputRef} />
+
+      {/* Step 2: Get Metadata */}
+      <GetMetadata ref={metadataRef} />
+
+      {/* Step 3: Data Preprocessing */}
       <DataPreprocessing />
     </div>
   );
