@@ -65,358 +65,201 @@ download_GEO <- function(gse_ids, type = c("series_matrix", "CEL")) {
   return(list(datasets = gse_objects, logs = logs))
 }
 
-
 #=========================================================
-# FUNCTION: get_geo_groups()
+# FUNCTION: get_geo_groups() with logs
 #=========================================================
 get_geo_groups <- function(pattern = NULL) {
-  
-  # ---- GUI: select folder once ----
-  data_dir <- tclvalue(
-    tkchooseDirectory(title = "Select folder containing series_matrix.txt files")
-  )
-  if (data_dir == "") stop("No folder selected. Aborting.")
+  # Path to datasets folder
+  data_dir <- "datasets"
+  if (!dir.exists(data_dir)) stop("Datasets folder does not exist.")
   
   sm_files <- list.files(
     data_dir,
     pattern = "series_matrix\\.txt$",
     full.names = TRUE
   )
-  
-  if (length(sm_files) == 0) {
-    stop("No series_matrix.txt files found in selected folder.")
-  }
+  if (length(sm_files) == 0) stop("No series_matrix.txt files found in datasets.")
   
   all_groups <- list()
-  
+  logs <- character()  # to store all logs for frontend
+
   for (sm_file in sm_files) {
     gse_id <- sub("_series_matrix.txt$", "", basename(sm_file))
-    cat("📄 Reading:", gse_id, "\n")
     
-    gse <- getGEO(filename = sm_file, GSEMatrix = TRUE)
-    eset <- if (inherits(gse, "ExpressionSet")) gse else gse[[1]]
-    pheno <- pData(eset)
+    # Capture everything printed to console
+    file_logs <- capture.output({
+      cat("📄 Reading:", gse_id, "\n")
+      gse <- getGEO(filename = sm_file, GSEMatrix = TRUE)
+      eset <- if (inherits(gse, "ExpressionSet")) gse else gse[[1]]
+      pheno <- pData(eset)
+      
+      # Identify metadata column
+      if ("characteristics_ch1.2" %in% colnames(pheno)) {
+        col_use <- "characteristics_ch1.2"
+      } else if ("characteristics_ch1" %in% colnames(pheno)) {
+        col_use <- "characteristics_ch1"
+      } else if (!is.null(pattern)) {
+        col_use <- grep(pattern, colnames(pheno), value = TRUE)[1]
+      } else {
+        stop("Cannot find a suitable metadata column.")
+      }
+      
+      meta_col <- pheno[[col_use]]
+      
+      group <- ifelse(
+        grepl("control", meta_col, ignore.case = TRUE), "NC",
+        ifelse(grepl("rheumatoid", meta_col, ignore.case = TRUE), "RA", NA)
+      )
+      
+      keep <- !is.na(group)
+      group <- factor(group[keep], levels = c("NC", "RA"))
+      names(group) <- rownames(pheno)[keep]
+      
+      cat("Group summary for", gse_id, ":\n")
+      print(table(group))
+      
+      all_groups[[length(all_groups) + 1]] <- group
+    })
     
-    # ---- Identify metadata column ----
-    if ("characteristics_ch1.2" %in% colnames(pheno)) {
-      col_use <- "characteristics_ch1.2"
-    } else if ("characteristics_ch1" %in% colnames(pheno)) {
-      col_use <- "characteristics_ch1"
-    } else if (!is.null(pattern)) {
-      col_use <- grep(pattern, colnames(pheno), value = TRUE)[1]
-    } else {
-      stop("Cannot find a suitable metadata column. Please specify 'pattern'.")
-    }
-    
-    meta_col <- pheno[[col_use]]
-    
-    group <- ifelse(
-      grepl("control", meta_col, ignore.case = TRUE), "NC",
-      ifelse(grepl("rheumatoid", meta_col, ignore.case = TRUE), "RA", NA)
-    )
-    
-    keep <- !is.na(group)
-    group <- factor(group[keep], levels = c("NC", "RA"))
-    names(group) <- rownames(pheno)[keep]
-    
-    cat("Group summary for", gse_id, ":\n")
-    print(table(group))
-    
-    all_groups[[length(all_groups) + 1]] <- group
+    # Append logs for this file
+    logs <- c(logs, file_logs)
   }
   
   group_vector <- do.call(c, all_groups)
   
-  return(group_vector)
+  # Save to R_objects folder
+  r_objects_dir <- "R_objects"
+  if (!dir.exists(r_objects_dir)) dir.create(r_objects_dir)
+  saveRDS(group_vector, file = file.path(r_objects_dir, "group_vector.rds"))
+  
+  return(list(
+    group_vector = group_vector,
+    logs = logs
+  ))
 }
-
-#================FUNCTION===============#
-#====preprocess_and_combat_GUI==========#
-preprocess_and_combat_GUI <- function(group_vector = NULL, input_paths = NULL) {
-  #-----------------------------
-  # Step 0: Select output directory
-  #-----------------------------
-  out_dir <- tclvalue(tkchooseDirectory(title = "Select folder to save gene-level XLSX files"))
-  if (is.null(out_dir) || length(out_dir) == 0 || out_dir == "") stop("No folder selected. Aborting.")
-  cat("📂 Output directory:", out_dir, "\n")
-  
-  exprs_list <- list()
-  annotation_list <- list()
-  
-  #-----------------------------
-  # Step 1: Select CEL folders if not provided
-  #-----------------------------
-  cel_folders <- input_paths
-  if (is.null(cel_folders)) {
-    parent_dir <- tclvalue(tkchooseDirectory(title = "Select folder containing GSE -CEL folders"))
-    if (is.null(parent_dir) || length(parent_dir) == 0 || parent_dir == "") stop("No folder selected. Aborting.")
-    
-    cel_folders <- list.dirs(parent_dir, full.names = TRUE, recursive = FALSE)
-    cel_folders <- cel_folders[grepl("-CEL$", cel_folders)]
-  }
-  
-  if (length(cel_folders) == 0) stop("No '-CEL' folders found.")
-  cat("Selected CEL folders:\n")
-  print(cel_folders)
-  
-  #-----------------------------
-  # Step 2: Read and RMA normalize each CEL dataset
-  #-----------------------------
-  for (cel_path in cel_folders) {
-    gse_id <- basename(cel_path)
-    cat("\n📦 Processing CEL dataset:", gse_id, "\n")
-    
-    cel_files <- list.celfiles(cel_path, full.names = TRUE)
-    if (length(cel_files) == 0) {
-      warning("No CEL files found for ", gse_id)
-      next
-    }
-    
-    # Check platform
-    cat("Checking CEL file chip types...\n")
-    chip_types <- sapply(cel_files, function(f) read.celfile.header(f)$cdfName)
-    platform <- unique(chip_types)
-    print(table(chip_types))
-    
-    if (!any(chip_types %in% c("HG-U133A", "HG-U133_Plus_2"))) {
-      cat("Skipping", gse_id, "because it is neither HG-U133A (GPL96) nor HG-U133_Plus_2 (GPL570).\n")
-      next
-    }
-    
-    if (any(platform == "HG-U133A")) {
-      cel_use <- names(chip_types[chip_types == "HG-U133A"])
-      annotation_db <- hgu133a.db
-      cat("Found", length(cel_use), "HG-U133A CEL files.\n")
-    } else if (any(platform == "HG-U133_Plus_2")) {
-      cel_use <- names(chip_types[chip_types == "HG-U133_Plus_2"])
-      annotation_db <- hgu133plus2.db
-      cat("Found", length(cel_use), "HG-U133_Plus_2 CEL files.\n")
-    }
-    
-    # Read CELs and RMA normalize
-    raw <- ReadAffy(filenames = cel_use)
-    norm_data <- affy::rma(raw)
-    exprs_mat <- exprs(norm_data)
-    
-    exprs_list[[gse_id]] <- exprs_mat
-    annotation_list[[gse_id]] <- annotation_db
-  }
-  
-  #-----------------------------
-  # Step 3: Merge probe-level matrices
-  #-----------------------------
-  common_probes <- Reduce(intersect, lapply(exprs_list, rownames))
-  cat("Number of common probes across datasets:", length(common_probes), "\n")
-  
-  exprs_common <- do.call(cbind, lapply(exprs_list, function(x) x[common_probes, , drop=FALSE]))
-  
-  # Remove any prefixes or suffixes, keep just GSM ID
-  colnames(exprs_common) <- sub(".*(GSM\\d+).*", "\\1", colnames(exprs_common))
-  # Filter only samples present in group_vector
-  keep_samples <- names(group_vector)[names(group_vector) %in% colnames(exprs_common)]
-  exprs_common <- exprs_common[, keep_samples]
-  group_vector <- group_vector[keep_samples]
-  
-  #-----------------------------
-  # Step 4: Create batch vector
-  #-----------------------------
-  # Create a batch vector based on which GSE each GSM came from
-  batch <- sapply(colnames(exprs_common), function(gsm_id) {
-    # Search through exprs_list for the GSE that contains this GSM
-    gse <- names(exprs_list)[sapply(exprs_list, function(mat) {
-      # Clean the column names of mat the same way
-      clean_mat_cols <- sub(".*(GSM\\d+).*", "\\1", colnames(mat))
-      gsm_id %in% clean_mat_cols
-    })]
-    # Return the GSE name (should be length 1)
-    gse
-  })
-  batch <- factor(batch)
-  cat("Batch composition:\n")
-  print(table(batch))
-  
-  
-  #-----------------------------
-  # Step 5: ComBat batch correction at probe level
-  #-----------------------------
-  mod <- model.matrix(~ group_vector)
-  combat_probe <- ComBat(dat = as.matrix(exprs_common),
-                         batch = batch,
-                         mod = mod,
-                         par.prior = TRUE,
-                         prior.plots = FALSE)
-  cat("✅ Probe-level ComBat complete.\n")
-  
-  #-----------------------------
-  # Step 6: Map probes → genes AFTER ComBat
-  #-----------------------------
-  annotation_combined <- c()
-  for (gse in names(exprs_list)) {
-    probes <- rownames(exprs_list[[gse]])
-    annot_db <- annotation_list[[gse]]
-    annotation_combined <- c(annotation_combined, mapIds(annot_db,
-                                                         keys = probes,
-                                                         column = "SYMBOL",
-                                                         keytype = "PROBEID",
-                                                         multiVals = "first"))
-  }
-  
-  annotation_combined <- annotation_combined[rownames(combat_probe)]
-  valid <- !is.na(annotation_combined)
-  combat_probe <- combat_probe[valid, , drop=FALSE]
-  gene_symbols <- annotation_combined[valid]
-  
-  combat_gene <- rowsum(combat_probe, group = gene_symbols)
-  
-  #-----------------------------
-  # Step 7: Save final gene-level matrix
-  #-----------------------------
-  out_file <- file.path(out_dir, "ComBat_final_gene_matrix.xlsx")
-  write.xlsx(combat_gene, out_file, rowNames = TRUE)
-  cat("📁 Final gene-level matrix saved to:", out_file, "\n")
-  
-  #-----------------------------
-  # Step 8: Optional QC plotting
-  #-----------------------------
-  par(mfrow = c(1,2))
-  boxplot(exprs_common, main="Before ComBat", outline=FALSE, col="lightcoral")
-  boxplot(combat_probe, main="After ComBat", outline=FALSE, col="lightseagreen")
-  par(mfrow = c(1,1))
-  
-  return(combat_gene)
-}
-
 
 #=========================================================
 # FUNCTION: gene_mat_preprocess()
 #=========================================================
-gene_mat_preprocess <- function(input_type = c("CEL", "series_matrix"), input_paths = NULL) {
-  input_type <- match.arg(input_type)
-  
-  #------------------ STEP 0 — Select output directory ------------------
-  out_dir <- tclvalue(tkchooseDirectory(title = "Select folder to save gene-level XLSX files"))
-  if (out_dir == "") stop("No folder selected. Aborting.")
-  
-  cat("📂 Output directory:", out_dir, "\n")
-  
+gene_mat_preprocess <- function(input_type = "CEL", input_paths = NULL) {
+
+  if (!input_type %in% c("CEL", "series_matrix")) {
+    stop("input_type must be 'CEL' or 'series_matrix'")
+  }
+
+  data_dir <- "datasets"
+  if (!dir.exists(data_dir)) stop("datasets folder does not exist.")
+
+  r_objects_dir <- "R_objects"
+  if (!dir.exists(r_objects_dir)) dir.create(r_objects_dir)
+
+  logs <- character()
   exprs_list <- list()
-  
-  #------------------ STEP 1 — Process CEL folders ------------------
+
+  log <- function(...) {
+    msg <- paste(...)
+    logs <<- c(logs, msg)
+    cat(msg, "\n")
+  }
+
+  #===================== CEL =====================#
   if (input_type == "CEL") {
-    cel_folders <- input_paths
-    if (is.null(cel_folders)) {
-      cel_folders <- list.dirs(
-        tclvalue(tkchooseDirectory(title = "Select folder containing GSE -CEL folders")),
-        full.names = TRUE,
-        recursive = FALSE
-      )
-      cel_folders <- cel_folders[grepl("-CEL$", cel_folders)]
-    }
-    if (length(cel_folders) == 0) stop("No '-CEL' folders found.")
-    
-    exprs_list <- list()
-    
+
+    cel_folders <- list.dirs(data_dir, recursive = FALSE, full.names = TRUE)
+    cel_folders <- cel_folders[grepl("-CEL$", cel_folders)]
+
+    if (length(cel_folders) == 0)
+      stop("No -CEL folders found in datasets.")
+
     for (cel_path in cel_folders) {
       gse_id <- basename(cel_path)
-      cat("\n📦 Processing CEL dataset:", gse_id, "\n")
-      
+      log("📦 Processing CEL dataset:", gse_id)
+
       cel_files <- list.celfiles(cel_path, full.names = TRUE)
       if (length(cel_files) == 0) {
-        warning("No CEL files found for ", gse_id)
+        log("⚠ No CEL files in", gse_id)
         next
       }
-      
-      # Check platform
-      cat("Checking CEL file chip types...\n")
-      chip_types <- sapply(cel_files, function(f) read.celfile.header(f)$cdfName)
-      platform <- unique(chip_types)
-      print(table(chip_types))
-      
-      # Keep only supported platforms
+
+      chip_types <- sapply(cel_files, function(f)
+        read.celfile.header(f)$cdfName)
+
+      log("Chip summary:")
+      log(capture.output(print(table(chip_types))))
+
       if (!any(chip_types %in% c("HG-U133A", "HG-U133_Plus_2"))) {
-        cat("Skipping", gse_id,
-            "because it is neither HG-U133A (GPL96) nor HG-U133_Plus_2 (GPL570).\n")
+        log("❌ Skipping", gse_id, "- unsupported platform")
         next
       }
-      
-      if (any(platform == "HG-U133A")) {
+
+      if (any(chip_types == "HG-U133A")) {
         cel_use <- names(chip_types[chip_types == "HG-U133A"])
         annotation_db <- hgu133a.db
-        cat("Found", length(cel_use), "HG-U133A CEL files.\n")
-      } else if (any(platform == "HG-U133_Plus_2")) {
+        log("Using HG-U133A")
+      } else {
         cel_use <- names(chip_types[chip_types == "HG-U133_Plus_2"])
         annotation_db <- hgu133plus2.db
-        cat("Found", length(cel_use), "HG-U133_Plus_2 CEL files.\n")
+        log("Using HG-U133_Plus_2")
       }
-      
-      # Read CELs (raw, no normalization)
+
       raw_data <- ReadAffy(filenames = cel_use)
-      exprs_data <- exprs(raw_data)
       norm_data <- affy::rma(raw_data)
       exprs_data <- exprs(norm_data)
-      cat("RMA complete. Matrix dimensions:", dim(exprs_data), "\n")
-      
-     #------------------ Probe → Gene Mapping ------------------
-    cat("Mapping probes to gene symbols...\n")
-    probe_ids <- rownames(exprs_data)
-    gene_symbols <- mapIds(
-      annotation_db,
-      keys = probe_ids,
-      column = "SYMBOL",
-      keytype = "PROBEID",
-      multiVals = "first"
-    )
-    
-    valid <- !is.na(gene_symbols)
-    exprs_data <- exprs_data[valid, , drop = FALSE]
-    gene_symbols <- gene_symbols[valid]
-    
-    # Collapse duplicates (average by gene symbol)
-    exprs_gene <- rowsum(exprs_data, group = gene_symbols)
-    
-    cat("Final gene-level matrix dimensions:", dim(exprs_gene), "\n")
-    
-    #------------------ Clean Column Names ------------------
-    cat("Cleaning sample (column) names...\n")
-    coln <- colnames(exprs_gene)
-    coln <- sub("(GSM\\d+).*", "\\1", coln)
-    coln <- sub("^X", "", coln)
-    colnames(exprs_gene) <- coln
-      
-      # Save XLSX
-      out_file <- file.path(out_dir, paste0(gse_id, "_gene_matrix.xlsx"))
-      write.xlsx(exprs_gene, out_file, rowNames = TRUE)
-      cat("✅ Saved:", out_file, "\n")
-      
+
+      log("RMA complete:", paste(dim(exprs_data), collapse = " x "))
+
+      # Probe → Gene
+      probe_ids <- rownames(exprs_data)
+      gene_symbols <- mapIds(
+        annotation_db,
+        keys = probe_ids,
+        column = "SYMBOL",
+        keytype = "PROBEID",
+        multiVals = "first"
+      )
+
+      valid <- !is.na(gene_symbols)
+      exprs_gene <- rowsum(exprs_data[valid, , drop = FALSE],
+                           group = gene_symbols[valid])
+
+      coln <- colnames(exprs_gene)
+      coln <- sub("(GSM\\d+).*", "\\1", coln)
+      coln <- sub("^X", "", coln)
+      colnames(exprs_gene) <- coln
+
+      save_path <- file.path(r_objects_dir,
+                             paste0(gse_id, "_gene_matrix.rds"))
+      saveRDS(exprs_gene, save_path)
+
+      log("✅ Saved:", save_path)
       exprs_list[[gse_id]] <- exprs_gene
     }
   }
-  
-  
-  #------------------ STEP 2 — Process Series Matrix Files ------------------
+
+  #===================== SERIES MATRIX =====================#
   if (input_type == "series_matrix") {
-    # If no files provided, ask user to select folder
+
     if (is.null(input_paths)) {
-      series_dir <- tclvalue(tkchooseDirectory(title = "Select folder containing series_matrix files"))
-      if (series_dir == "") stop("No folder selected. Aborting.")
-      input_paths <- list.files(series_dir, pattern = "series_matrix.*\\.txt$", full.names = TRUE)
+      input_paths <- list.files(
+        data_dir,
+        pattern = "series_matrix.*\\.txt$",
+        full.names = TRUE
+      )
     }
-    
-    if (length(input_paths) == 0) stop("No series_matrix files found.")
-    
-    exprs_list <- list()
-    
+
+    if (length(input_paths) == 0)
+      stop("No series_matrix files found.")
+
     for (f in input_paths) {
-      gse_id <- tools::file_path_sans_ext(basename(f))
-      cat("\n📦 Processing series_matrix dataset:", gse_id, "\n")
-      
-      # Load the local series_matrix file directly
-      expr <- read.delim(f, comment.char = "!", stringsAsFactors = FALSE, row.names = 1)
-      
-      # Determine platform and annotation
+      gse_id <- sub("_series_matrix.*\\.txt$", "", basename(f))
+      log("📦 Processing series_matrix:", gse_id)
+
+      expr <- read.delim(f, comment.char = "!",
+                         stringsAsFactors = FALSE,
+                         row.names = 1)
+
       annot_db <- hgu133a.db
-      
-      # Map probes → genes
+
       probe_ids <- rownames(expr)
       gene_symbols <- mapIds(
         annot_db,
@@ -425,60 +268,32 @@ gene_mat_preprocess <- function(input_type = c("CEL", "series_matrix"), input_pa
         keytype = "PROBEID",
         multiVals = "first"
       )
-      
+
       valid <- !is.na(gene_symbols)
-      expr <- expr[valid, , drop = FALSE]
-      gene_symbols <- gene_symbols[valid]
-      
-      # Collapse duplicates by averaging
-      exprs_gene <- rowsum(expr, group = gene_symbols)
-      
-      # Clean GSM column names
+      exprs_gene <- rowsum(expr[valid, , drop = FALSE],
+                           group = gene_symbols[valid])
+
       coln <- colnames(exprs_gene)
       coln <- sub("(GSM\\d+).*", "\\1", coln)
       coln <- sub("^X", "", coln)
       colnames(exprs_gene) <- coln
-      
-      # Save XLSX
-      out_file <- file.path(out_dir, paste0(gse_id, "_gene_matrix.xlsx"))
-      write.xlsx(exprs_gene, out_file, rowNames = TRUE)
-      cat("✅ Saved:", out_file, "\n")
-      
+
+      save_path <- file.path(r_objects_dir,
+                             paste0(gse_id, "_gene_matrix.rds"))
+      saveRDS(exprs_gene, save_path)
+
+      log("✅ Saved:", save_path)
       exprs_list[[gse_id]] <- exprs_gene
     }
-
-    
-    cat("\n📁 All series_matrix datasets processed.\n")
   }
-  
-  cat("\n📁 All datasets processed. Gene-level XLSX files are ready.\n")
-  
-  
-  #------------plots for RMA-------------------#
-  # Set up side-by-side plots
-  par(mfrow = c(1, 2), mar = c(10, 4, 4, 2)) # rotate x labels
-  
-  # Boxplot of raw CEL intensities
-  boxplot(raw_data,
-          outline = FALSE,
-          col = "lightblue",
-          las = 2,
-          main = "Raw CEL Intensities",
-          ylab = "Expression")
-  
-  # Boxplot of RMA-normalized data
-  boxplot(exprs_data,
-          outline = FALSE,
-          col = "lightgreen",
-          las = 2,
-          main = "RMA-normalized Intensities",
-          ylab = "Expression")
-  
-  # Reset plotting layout
-  par(mfrow = c(1, 1))
-  return(exprs_list)
-}
 
+  log("🎉 All datasets processed.")
+
+  return(list(
+    objects = names(exprs_list),
+    logs = logs
+  ))
+}
 
 #=========================================================
 # FUNCTION: merge_and_combat()
