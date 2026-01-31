@@ -1,0 +1,19 @@
+# Node / React
+node_modules/
+build/
+dist/
+.env
+.DS_Store
+
+# R backend
+R-backend/*.RData
+R-backend/*.rds
+R-backend/*.Rhistory
+R-backend/*.Rproj.user
+
+# Datasets folder: ignore everything except placeholder
+R-backend/datasets/*
+!R-backend/datasets/.gitkeep
+
+# VS Code
+.vscode/

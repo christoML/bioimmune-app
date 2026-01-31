@@ -1,0 +1,373 @@
+/* ==========================
+   Main container with two-column layout
+========================== */
+.bio-panel {
+  display: flex;
+  flex-direction: row;
+  margin: 20px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 10px;
+  background-color: #f9f9f9;
+}
+
+/* ==========================
+   Left column: button(s)
+========================== */
+.bio-left {
+  width: 200px; /* fixed width for button column */
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* spacing between multiple buttons */
+}
+
+/* ==========================
+   Right column: editor and response box
+========================== */
+.bio-right {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-left: 20px; /* spacing between button and editor */
+}
+
+/* Smaller input box (contract ID) */
+.bio-right-id-input {
+  width: 100%;
+  height: 40px;
+  font-size: 14px;
+  padding: 5px;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+/* ==========================
+   Input field for text (used for contract ID)
+========================== */
+.bio-input {
+  width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+/* ==========================
+   Buttons
+========================== */
+.bio-btn {
+  padding: 8px 15px;
+  background-color: #007bff; /* blue */
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background-color 0.2s;
+}
+
+.bio-btn:hover {
+  background-color: #0056b3;
+}
+
+/* Cancel button style */
+.bio-btn-cancel {
+  background-color: #777;
+  margin-left: 10px;
+}
+
+.bio-btn-cancel:hover {
+  background-color: #555;
+}
+
+/* Button group container */
+.bio-btn-group {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+}
+
+/* ==========================
+   Alert messages (success / error)
+========================== */
+.bio-alert {
+  display: inline-flex; /* shrink to fit content */
+  align-items: center;
+  padding: 8px 12px; /* vertical + horizontal padding */
+  border-radius: 5px;
+  margin-top: 10px;
+  font-weight: bold;
+  max-width: 100%; /* ensure it doesn't overflow the right panel */
+  word-break: break-word;
+}
+
+/* Success alert */
+.bio-alert.success {
+  background-color: #28a745; /* green */
+  color: white;
+}
+
+/* Error alert */
+.bio-alert.error {
+  background-color: #dc3545; /* red */
+  color: white;
+}
+
+/* Alert message text */
+.bio-alert-text {
+  margin-right: 10px; /* space for close button */
+}
+
+/* Close button */
+.bio-alert-close {
+  background: transparent;
+  border: none;
+  color: white;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+
+
+/* Clear All button styling */
+.bio-btn-clear {
+  background-color: orange;
+  color: white;
+  font-weight: bold;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 10px; /* a bit higher */
+  margin-left: 20px; /* move slightly to the right */
+  display: inline-block;
+  transition: background-color 0.2s ease;
+}
+
+.bio-btn-clear:hover {
+  background-color: darkorange;
+}
+
+/* =========================
+   SIDEBAR
+========================= */
+
+.sidebar {
+  width: 180px;
+  min-height: calc(100vh - 60px);
+  background-color: #f9f9f9;
+  border-right: 1px solid #e0e0e0;
+  padding: 15px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+/* Sidebar logo */
+.sidebar-logo img {
+  max-width: 100px;
+  margin-bottom: 20px;
+}
+
+/* Sidebar menu */
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sidebar-section {
+  margin-top: 12px;
+  font-size: 12px;
+  font-weight: bold;
+  color: #666;
+  text-transform: uppercase;
+}
+
+/* Sidebar links */
+.sidebar-link {
+  display: block;
+  padding: 6px 12px;
+  font-size: 14px;
+  color: #007bff;
+  text-decoration: none;
+  border-radius: 4px;
+  background-color: transparent;
+  transition: background-color 0.2s;
+}
+
+.sidebar-link:hover {
+  background-color: #f0f0f0;
+  cursor: pointer;
+}
+
+.sidebar-link:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+/* =========================
+   SAFETY: prevent overflow
+========================= */
+
+.sidebar * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.sidebar textarea,
+.sidebar input,
+.sidebar pre {
+  width: 100%;
+}
+
+/* Container styling */
+.gse-input-container {
+  max-width: 400px;
+  margin: 20px auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Label styling */
+.gse-input-label {
+  margin-bottom: 5px;
+  font-weight: bold;
+}
+
+/* Textbox styling */
+.gse-input-textbox {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  margin-bottom: 10px;
+}
+
+/* Button styling */
+.gse-input-button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: none;
+  background-color: #007bff;
+  color: white;
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+/* Disabled / grayed-out state */
+.gse-input-button.disabled,
+.gse-input-button:disabled {
+  background-color: #aaa;   /* gray color */
+  cursor: not-allowed;      /* "no" cursor */
+  color: #eee;              /* lighter text */
+}
+
+/* Spinner inside button */
+.spinner {
+  border: 2px solid #f3f3f3; /* light gray background */
+  border-top: 2px solid white; /* white spinner */
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+}
+
+/* Spinner animation */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Error message styling */
+.gse-input-error {
+  color: red;
+  margin-top: 10px;
+}
+
+/* Logs container (optional) */
+.gse-input-logs {
+  margin-top: 1rem;
+  height: 300px;
+  overflow-y: auto;
+  background-color: #f4f4f4;
+  padding: 0.5rem;
+  border-radius: 5px;
+  font-family: monospace;
+  white-space: pre-line;
+}
+
+/* Data Preprocessing Dropdown */
+
+.dp-container {
+  position: relative;
+  display: inline-block;
+  margin: 20px 0;
+}
+
+.dp-main-btn {
+  background-color: #2f855a;
+  color: white;
+}
+
+.dp-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ccc;
+  width: 220px;
+  text-align: left;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+}
+
+.dp-item {
+  position: relative;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dp-item:hover {
+  background-color: #f0f0f0;
+}
+
+.dp-arrow {
+  font-size: 14px;
+  color: black;
+}
+
+/* Right submenu */
+.dp-submenu {
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 150px;
+  background: white;
+  border: 1px solid #ccc;
+  display: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.dp-item:hover .dp-submenu {
+  display: block;
+}
+
+.dp-subitem {
+  padding: 10px;
+  cursor: pointer;
+}
+
+.dp-subitem:hover {
+  background-color: #e6f2ff;
+}
